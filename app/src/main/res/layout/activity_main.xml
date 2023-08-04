@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+
+    android:background="@color/background_todo_app"
+
+    tools:context=".MainActivity">
+
+    <Button
+        android:id="@+id/btn_suma_main"
+        android:layout_width="0dp"
+        android:layout_height="75dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginHorizontal="20dp"
+        android:text="@string/suma_db"
+        android:textColor="@color/general_text"
+        android:textAllCaps="false"
+        android:textSize="19dp"
+        android:backgroundTint ="@color/background_card"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_att_main" />
+
+    <Button
+        android:id="@+id/btn_att_main"
+        android:layout_width="0dp"
+        android:layout_height="75dp"
+        android:layout_marginTop="32dp"
+        android:text="Atenuación por distancia"
+        android:textColor="@color/general_text"
+        android:layout_marginHorizontal="20dp"
+        android:textAllCaps="false"
+        android:textSize="19dp"
+        android:backgroundTint ="@color/background_card"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_dmx" />
+
+    <Button
+        android:id="@+id/btn_dmx"
+        android:layout_width="0dp"
+        android:layout_height="75dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginHorizontal="20dp"
+        android:text="DMX Dipswitch"
+        android:textColor="@color/general_text"
+        android:textAllCaps="false"
+        android:textSize="19dp"
+        android:backgroundTint ="@color/background_card"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_sonometro" />
+
+    <Button
+        android:id="@+id/btn_sonometro"
+        android:layout_width="0dp"
+        android:layout_height="75dp"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="144dp"
+        android:backgroundTint="@color/background_card"
+        android:text="Sonómetro"
+        android:textAllCaps="false"
+        android:textColor="@color/general_text"
+        android:textSize="19dp"
+        app:iconTint="#001DBF"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

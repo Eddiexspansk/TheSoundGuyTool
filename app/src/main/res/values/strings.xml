@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SoundGuyToolkit</string>
+    <string name="suma_db">Suma dB</string>
+    <string name="stop">Stop</string>
+    <string name="start">Start</string>
+    <string name="sistemas_pasivos">Sistemas pasivos</string>
+</resources>
