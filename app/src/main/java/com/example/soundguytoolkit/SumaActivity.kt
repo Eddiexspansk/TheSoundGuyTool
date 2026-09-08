@@ -1,94 +1,113 @@
-package com.example.soundguytoolkit;
+package com.example.soundguytoolkit
 
-import static java.lang.Double.parseDouble;
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import java.lang.Double.parseDouble
+import java.util.Locale
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.round
 
-import androidx.appcompat.app.AppCompatActivity;
+class SumaActivity : AppCompatActivity() {
 
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.Toast;
+    private lateinit var etInput: EditText
+    private lateinit var tvResult: TextView
+    private lateinit var rvLevels: RecyclerView
+    private lateinit var btnClearAll: Button
+    
+    private val levels = mutableListOf<Double>()
+    private val adapter = LevelsAdapter()
 
-public class SumaActivity extends AppCompatActivity {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_suma)
 
-    private EditText et1;
-    private TextView tv1;
-    Button btnAdd;
-    Button btnRes;
-    double Po = 20;
-    Double numero1, numero2;
-    Double resultado;
-    String operador;
+        etInput = findViewById(R.id.etx_insert_db)
+        tvResult = findViewById(R.id.res_db)
+        rvLevels = findViewById(R.id.rv_levels)
+        btnClearAll = findViewById(R.id.btn_clear_all)
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_suma);
+        rvLevels.layoutManager = LinearLayoutManager(this)
+        rvLevels.adapter = adapter
 
-        et1 = findViewById(R.id.etx_insert_db);
-        tv1 = findViewById(R.id.res_db);
-        btnAdd = findViewById(R.id.btn_suma);
-        btnRes = findViewById(R.id.btn_res);
+        findViewById<View>(R.id.toolbar).setOnClickListener {
+            onBackPressed()
+        }
 
-
-    }
-
-    public double convertToPascal(double a) {
-
-        double pascales = 20 * Math.pow(10, (a / Po));
-        convertToDecibel(pascales);
-        return pascales;
-    }
-
-
-    public double convertToDecibel(double b) {
-
-        System.out.println(b);
-        double decibel = Math.round((20 * Math.log10(b / Po))*100.0)/100.0;
-        System.out.println(decibel);
-        String decibelSt = Double.toString(decibel);
-
-        tv1.setText(decibelSt + " dBSpl");
-        return decibel;
-
-    }
-
-
-    public void onClickIgual(View view) {
-        try {
-            numero2 = parseDouble((et1.getText().toString()));
-
-            if (operador.equals("+")) {
-                resultado = convertToPascal(numero1) + convertToPascal(numero2);
-                convertToDecibel(resultado);
-                onClickOperacionCapturaNumero1(view);
-            } else
-
-                tv1.setText(resultado.toString());
-        }catch (Exception e){
-            Toast.makeText(this, "Debe ingresar otro número", Toast.LENGTH_SHORT).show();
+        btnClearAll.setOnClickListener {
+            val size = levels.size
+            levels.clear()
+            adapter.notifyItemRangeRemoved(0, size)
+            updateCalculation()
         }
     }
 
-
-    public void onClickSuma(View view) {
-        try {
-            operador = "+";
-            onClickOperacionCapturaNumero1(view);
-            convertToPascal(numero1);
-        } catch (Exception e) {
-            Toast.makeText(this, "Ingrese valor", Toast.LENGTH_SHORT).show();
+    private fun updateCalculation() {
+        if (levels.isEmpty()) {
+            tvResult.text = "0.0 dB"
+            return
         }
-
-
+        
+        var totalPower = 0.0
+        for (level in levels) {
+            totalPower += 10.0.pow(level / 10.0)
+        }
+        
+        val result = round(10.0 * log10(totalPower) * 100.0) / 100.0
+        tvResult.text = String.format(Locale.getDefault(), "%.2f dB", result)
     }
 
+    fun onClickSuma(view: View) {
+        try {
+            val input = etInput.text.toString()
+            if (input.isNotEmpty()) {
+                val value = parseDouble(input)
+                levels.add(0, value) // Add to top
+                adapter.notifyItemInserted(0)
+                rvLevels.scrollToPosition(0)
+                etInput.setText("")
+                updateCalculation()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Valor inválido", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-    public void onClickOperacionCapturaNumero1(View view) {
+    inner class LevelsAdapter : RecyclerView.Adapter<LevelsAdapter.ViewHolder>() {
 
-        numero1 = parseDouble(et1.getText().toString());
-        et1.setText("");
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val tvValue: TextView = view.findViewById(R.id.tv_level_value)
+            val btnDelete: Button = view.findViewById(R.id.btn_delete_level)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_db_level, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val level = levels[position]
+            holder.tvValue.text = String.format(Locale.getDefault(), "%.1f dB", level)
+            holder.btnDelete.setOnClickListener {
+                val currentPos = holder.adapterPosition
+                if (currentPos != RecyclerView.NO_POSITION) {
+                    levels.removeAt(currentPos)
+                    notifyItemRemoved(currentPos)
+                    updateCalculation()
+                }
+            }
+        }
+
+        override fun getItemCount() = levels.size
     }
 }

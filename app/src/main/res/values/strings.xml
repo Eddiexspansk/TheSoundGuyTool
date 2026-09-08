@@ -4,4 +4,9 @@
     <string name="stop">Stop</string>
     <string name="start">Start</string>
     <string name="sistemas_pasivos">Sistemas pasivos</string>
+    <string name="calibrate">Calibrar</string>
+    <string name="dba">dB(A)</string>
+    <string name="dbc">dB(C)</string>
+    <string name="fast">Fast</string>
+    <string name="slow">Slow</string>
 </resources>

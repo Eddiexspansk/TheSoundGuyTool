@@ -1,53 +1,34 @@
-package com.example.soundguytoolkit;
+package com.example.soundguytoolkit
 
-import androidx.appcompat.app.AppCompatActivity;
+import android.content.Intent
+import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 
-import android.content.Intent;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
+class MainActivity : AppCompatActivity() {
 
-public class MainActivity extends AppCompatActivity {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        findViewById<View>(R.id.btn_suma_card).setOnClickListener { v ->
+            val intent = Intent(v.context, SumaActivity::class.java)
+            startActivityForResult(intent, 0)
+        }
 
-        Button btn = findViewById(R.id.btn_suma_main);
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent intent = new Intent (v.getContext(), SumaActivity.class);
-                startActivityForResult(intent, 0);
-            }
-        });
+        findViewById<View>(R.id.btn_att_card).setOnClickListener { view ->
+            val intent2 = Intent(view.context, DistanciaActivity::class.java)
+            startActivityForResult(intent2, 0)
+        }
 
-        Button btn_dist = findViewById(R.id.btn_att_main);
-        btn_dist.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent2 = new Intent(view.getContext(), DistanciaActivity.class);
-                startActivityForResult(intent2, 0);
-            }
-        });
+        findViewById<View>(R.id.btn_dmx_card).setOnClickListener { view ->
+            val intent3 = Intent(view.context, DipswitchActivity::class.java)
+            startActivity(intent3)
+        }
 
-        Button btn_dmx = findViewById(R.id.btn_dmx);
-        btn_dmx.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent3 = new Intent(view.getContext(), DipswitchActivity.class);
-                startActivity(intent3);
-            }
-        });
-
-        Button btn_sonometro = findViewById(R.id.btn_sonometro);
-        btn_sonometro.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Intent intent4 = new Intent(view.getContext(), SonometroActivity.class);
-                startActivity(intent4);
-            }
-        });
+        findViewById<View>(R.id.btn_sonometro_card).setOnClickListener { view ->
+            val intent4 = Intent(view.context, SonometroActivity::class.java)
+            startActivity(intent4)
+        }
     }
 }

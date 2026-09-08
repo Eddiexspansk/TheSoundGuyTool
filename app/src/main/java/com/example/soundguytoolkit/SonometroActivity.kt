@@ -1,203 +1,286 @@
-package com.example.soundguytoolkit;
+package com.example.soundguytoolkit
 
-import static android.Manifest.permission.RECORD_AUDIO;
-import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+import android.Manifest.permission.RECORD_AUDIO
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.os.Bundle
+import android.view.View
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.*
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+class SonometroActivity : AppCompatActivity() {
 
+    private lateinit var mResultTextView: TextView
+    private lateinit var tvPeak: TextView
+    private lateinit var levelIndicator: LinearProgressIndicator
+    private lateinit var mStartButton: Button
+    private lateinit var mStopButton: Button
+    private lateinit var mCalibrateButton: Button
+    private lateinit var toggleWeighting: MaterialButtonToggleGroup
+    private lateinit var toggleTimeWeighting: MaterialButtonToggleGroup
 
-import android.Manifest;
-import android.content.Context;
-import android.content.ContextWrapper;
-import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.media.MediaRecorder;
-import android.os.Bundle;
-import android.os.Environment;
-import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
-import android.widget.Toast;
+    private var maxPeak = 0.0
+    private var calibrationOffset = 0.0
+    private var currentRawRms = 0.0
+    private var isMeasuring = AtomicBoolean(false)
+    private var useAWeighting = false
+    private var useSlowTime = false // Default to Fast
 
-import java.io.File;
-import java.io.IOException;
-import java.sql.SQLOutput;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+    // AudioRecord settings
+    private val sampleRate = 44100
+    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
+    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+    private var minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
-public class SonometroActivity extends AppCompatActivity {
+    // Biquad state for filters
+    private var aFilters = mutableListOf<BiquadFilter>()
+    private var cFilters = mutableListOf<BiquadFilter>()
 
-    private static final int REQUEST_RECORD_AUDIO_PERMISSION = 1;
-    private MediaRecorder mRecorder;
-    private TextView mResultTextView;
-    private Button mStartButton;
-    private Button mStopButton;
-    private static String mFileName = null;
-    static final private double EMA_FILTER = 0.6;
-    private double mEMA = 0.0;
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_sonometro)
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        loadCalibration()
+        setupFilters()
 
-        setContentView(R.layout.activity_sonometro);
+        mResultTextView = findViewById(R.id.result_text_view)
+        tvPeak = findViewById(R.id.tv_peak)
+        levelIndicator = findViewById(R.id.sound_level_indicator)
+        mStartButton = findViewById(R.id.start_button)
+        mStopButton = findViewById(R.id.stop_button)
+        mCalibrateButton = findViewById(R.id.btn_calibrate)
+        toggleWeighting = findViewById(R.id.toggle_weighting)
+        toggleTimeWeighting = findViewById(R.id.toggle_time_weighting)
 
-        mResultTextView = (TextView) findViewById(R.id.result_text_view);
-        mStartButton = (Button) findViewById(R.id.start_button);
-        mStopButton = (Button) findViewById(R.id.stop_button);
-        mStartButton.setBackgroundColor(Color.BLUE);
-        mStartButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                startMeasuring();
+        findViewById<View>(R.id.toolbar).setOnClickListener {
+            onBackPressed()
+        }
+
+        mStartButton.setOnClickListener {
+            startMeasuring()
+        }
+
+        mStopButton.setOnClickListener {
+            stopMeasuring()
+        }
+
+        mCalibrateButton.setOnClickListener {
+            showCalibrationDialog()
+        }
+
+        toggleWeighting.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                useAWeighting = (checkedId == R.id.btn_dba)
+                maxPeak = 0.0
             }
-        });
+        }
 
-        mStopButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                stopMeasuring();
+        toggleTimeWeighting.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                useSlowTime = (checkedId == R.id.btn_slow)
             }
-        });
+        }
     }
 
-    private void startMeasuring() {
+    private fun setupFilters() {
+        aFilters.clear()
+        aFilters.add(BiquadFilter(0.169641, 0.339282, 0.169641, 1.0, -1.821360, 0.830601))
+        aFilters.add(BiquadFilter(1.0, -2.0, 1.0, 1.0, -1.993478, 0.993488))
+        aFilters.add(BiquadFilter(1.0, 0.0, -1.0, 1.0, -1.890666, 0.893113))
 
-        if (CheckPermissions()) {
-            String state = Environment.getExternalStorageState();
-            if (Environment.MEDIA_MOUNTED.equals(state)) {
-                ContextWrapper cw = new ContextWrapper(getApplicationContext());
-                File outputWaveFileDir = cw.getDir("waves", Context.MODE_PRIVATE);
-                if (!outputWaveFileDir.exists()) {
-                    if (!outputWaveFileDir.mkdirs()) {
-                        Toast.makeText(getApplicationContext(), "Can not create dir " + outputWaveFileDir.getAbsolutePath(), Toast.LENGTH_LONG).show();
-                        onBackPressed();
-                    }
-                }
-                File outputWaveFile = new File(outputWaveFileDir, "wave_" + System.currentTimeMillis() + ".3gp");
+        cFilters.clear()
+        cFilters.add(BiquadFilter(0.169641, 0.339282, 0.169641, 1.0, -1.821360, 0.830601))
+        cFilters.add(BiquadFilter(1.0, -2.0, 1.0, 1.0, -1.993478, 0.993488))
+    }
 
-                while (outputWaveFile.exists()) {
-                    try {
-                        Thread.sleep(10);
-                    } catch (InterruptedException e) {
-                    }
-                    outputWaveFile = new File(outputWaveFileDir, "wave_" + System.currentTimeMillis() + ".3gp");
-                }
+    private fun loadCalibration() {
+        val prefs = getSharedPreferences("SoundGuyPrefs", MODE_PRIVATE)
+        calibrationOffset = prefs.getFloat("calibration_offset", 0.0f).toDouble()
+    }
+
+    private fun saveCalibration(offset: Double) {
+        val prefs = getSharedPreferences("SoundGuyPrefs", MODE_PRIVATE)
+        prefs.edit().putFloat("calibration_offset", offset.toFloat()).apply()
+        calibrationOffset = offset
+        Toast.makeText(this, "Calibración guardada", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showCalibrationDialog() {
+        val builder = MaterialAlertDialogBuilder(this)
+        builder.setTitle("Calibración dB(C)")
+        val currentStr = String.format(Locale.getDefault(), "%.1f", currentRawRms)
+        builder.setMessage("Ingrese el valor real mostrado en su sonómetro.\nMedido ahora: " + currentStr + " dB")
+
+        val input = EditText(this)
+        input.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        input.hint = "Nivel real (dB)"
+        builder.setView(input)
+
+        builder.setPositiveButton("Calibrar") { _, _ ->
+            val realValueStr = input.text.toString()
+            if (realValueStr.isNotEmpty()) {
                 try {
-                    outputWaveFile.createNewFile();
-                } catch (IOException e) {
-                    Toast.makeText(getApplicationContext(), "Can not create file " + outputWaveFile.getName(), Toast.LENGTH_LONG).show();
-                    onBackPressed();
+                    val realValue = realValueStr.toDouble()
+                    val newOffset = realValue - currentRawRms
+                    saveCalibration(newOffset)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Valor inválido", Toast.LENGTH_SHORT).show()
                 }
-                outputWaveFile.deleteOnExit();
-                Log.i("TAG", "Writting to " + outputWaveFile.getAbsolutePath());
-                mFileName = outputWaveFile.getAbsolutePath();
-
-            } else if (Environment.MEDIA_MOUNTED_READ_ONLY.equals(state)) {
-                Toast.makeText(this.getApplicationContext(), "External storage mounted read only", Toast.LENGTH_LONG).show();
-                this.onBackPressed();
-            } else {
-                Toast.makeText(this.getApplicationContext(), "External storage state: " + state, Toast.LENGTH_LONG).show();
-                this.onBackPressed();
             }
+        }
+        builder.setNegativeButton("Cancelar", null)
+        builder.show()
+    }
 
-            mRecorder = new MediaRecorder();
-            mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
-            mRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-            mRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
-            mRecorder.setOutputFile(mFileName);
-
-            try {
-                mRecorder.prepare();
-            } catch (IOException e) {
-                Log.e("TAG", "prepare() failed");
-                System.out.println("" + e);
-            }
-
-            ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-
-            mRecorder.start();
-            Runnable task = () -> {
-                try {
-                    Log.i(Thread.currentThread().getName(), "executor - started");
-                    double rms = 0.0;
-                    int readSize = mRecorder.getMaxAmplitude();
-                    Log.i(Thread.currentThread().getName(), "readsize: " + readSize);
-                    if (readSize > 0 && readSize < 1000000) {
-                        rms = 20.0 * Math.log10(readSize);
-                        Log.i(Thread.currentThread().getName(), "calculated " + rms);
-                    }
-                    // No estai en el UiThread, estai en un thread a parte (Runnable)
-                    // tenis que ir a buscar el UiThread y ahí cambiai el mResultTextView asi:
-                    // este "final" es para que el valor de _rms entre en el thread del runOnUiThread
-                    //              se supone que el thread de adentro no puede modificar ese valor
-                    //              (pero si envuelves el valor en otra clase, podría)
-                    final double _rms=rms;
-                    runOnUiThread(()->{mResultTextView.setText(String.format("%.0f dB", _rms));});
-                    Log.i(Thread.currentThread().getName(), "executor - ended");
-                } catch (Exception e){ // https://stackoverflow.com/questions/28007317/scheduled-executor-service-isnt-working
-                    e.printStackTrace();
-                }
-            };
-
-            executor.scheduleAtFixedRate(task, 0, 1, TimeUnit.SECONDS);
-            Toast.makeText(this, "Grabando...", Toast.LENGTH_SHORT).show();
-
+    private fun startMeasuring() {
+        if (checkPermissions()) {
+            if (isMeasuring.get()) return
+            isMeasuring.set(true)
+            
+            Thread {
+                measureLoop()
+            }.start()
+            
+            mStartButton.isEnabled = false
+            mStopButton.isEnabled = true
+            Toast.makeText(this, "Midiendo...", Toast.LENGTH_SHORT).show()
         } else {
-            RequestPermissions();
+            requestPermissions()
         }
     }
 
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    @SuppressLint("MissingPermission")
+    private fun measureLoop() {
+        val recorder = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            sampleRate,
+            channelConfig,
+            audioFormat,
+            minBufferSize
+        )
 
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode) {
-            case REQUEST_RECORD_AUDIO_PERMISSION:
-                if (grantResults.length > 0) {
-                    boolean permissionToRecord = grantResults[0] == PackageManager.PERMISSION_GRANTED;
-                    boolean permissionToStore = grantResults[1] == PackageManager.PERMISSION_GRANTED;
-                    if (permissionToRecord && permissionToStore) {
-                        Toast.makeText(getApplicationContext(), "Permission Granted", Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(getApplicationContext(), "Permission Denied", Toast.LENGTH_LONG).show();
+        if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+            isMeasuring.set(false)
+            return
+        }
+
+        recorder.startRecording()
+        val buffer = ShortArray(minBufferSize)
+        var smoothedPower = 0.0
+
+        while (isMeasuring.get()) {
+            val read = recorder.read(buffer, 0, buffer.size)
+            if (read > 0) {
+                var sumSquare = 0.0
+                for (i in 0 until read) {
+                    var sample = buffer[i].toDouble() / 32768.0
+                    
+                    val filters = if (useAWeighting) aFilters else cFilters
+                    for (filter in filters) {
+                        sample = filter.process(sample)
                     }
+                    
+                    sumSquare += sample * sample
                 }
-                break;
+                
+                val currentPower = sumSquare / read
+                
+                // Time weighting (Exponential Moving Average)
+                // tau = 0.125 for Fast, 1.0 for Slow
+                val tau = if (useSlowTime) 1.0 else 0.125
+                val tInterval = read.toDouble() / sampleRate
+                val alpha = 1.0 - exp(-tInterval / tau)
+                
+                if (smoothedPower == 0.0) {
+                    smoothedPower = currentPower
+                } else {
+                    smoothedPower = alpha * currentPower + (1.0 - alpha) * smoothedPower
+                }
+                
+                val db = if (smoothedPower > 0) 10.0 * log10(smoothedPower) + 100.0 else 0.0
+                
+                currentRawRms = db
+                val finalDb = db + calibrationOffset
+                
+                if (finalDb > maxPeak) {
+                    maxPeak = finalDb
+                }
+
+                runOnUiThread {
+                    mResultTextView.text = String.format(Locale.getDefault(), "%.0f dB", finalDb)
+                    tvPeak.text = String.format(Locale.getDefault(), "Pico: %.0f dB", maxPeak)
+                    levelIndicator.progress = finalDb.toInt().coerceIn(0, 120)
+                }
+            }
+        }
+
+        recorder.stop()
+        recorder.release()
+    }
+
+    private fun stopMeasuring() {
+        isMeasuring.set(false)
+        mStartButton.isEnabled = true
+        mStopButton.isEnabled = false
+        Toast.makeText(this, "Medición detenida", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startMeasuring()
+            }
         }
     }
 
-    public boolean CheckPermissions() {
-
-        int result = ContextCompat.checkSelfPermission(getApplicationContext(), WRITE_EXTERNAL_STORAGE);
-        int result1 = ContextCompat.checkSelfPermission(getApplicationContext(), RECORD_AUDIO);
-        return result == PackageManager.PERMISSION_GRANTED && result1 == PackageManager.PERMISSION_GRANTED;
+    private fun checkPermissions(): Boolean {
+        return ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     }
 
-    private void RequestPermissions() {
-
-        ActivityCompat.requestPermissions(SonometroActivity.this, new String[]{RECORD_AUDIO, WRITE_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
+    private fun requestPermissions() {
+        ActivityCompat.requestPermissions(this, arrayOf(RECORD_AUDIO), REQUEST_RECORD_AUDIO_PERMISSION)
     }
 
-    private void stopMeasuring() {
-        if (mRecorder != null) {
-            mRecorder.stop();
-            mRecorder.release();
-            mRecorder = null;
+    override fun onDestroy() {
+        super.onDestroy()
+        isMeasuring.set(false)
+    }
+
+    class BiquadFilter(
+        private val b0: Double, private val b1: Double, private val b2: Double,
+        private val a0: Double, private val a1: Double, private val a2: Double
+    ) {
+        private var x1 = 0.0
+        private var x2 = 0.0
+        private var y1 = 0.0
+        private var y2 = 0.0
+
+        fun process(x: Double): Double {
+            val y = (b0 / a0) * x + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            return y
         }
     }
 
-    public double getAmplitude() {
-        if (mRecorder != null)
-            return (mRecorder.getMaxAmplitude() / 2700.0);
-        else
-            return 0;
+    companion object {
+        private const val REQUEST_RECORD_AUDIO_PERMISSION = 1
     }
-
-
 }
