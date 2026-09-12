@@ -74,6 +74,3 @@ Interfaz visual realista para configurar equipos de iluminación:
 
 ---
 
-## ⚖️ Licencia
-
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
