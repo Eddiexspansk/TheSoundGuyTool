@@ -69,8 +69,8 @@ Interfaz visual realista para configurar equipos de iluminación:
 ## 👨‍💻 Autor
 
 **Tu Nombre**
-*   LinkedIn: [Tu Perfil de LinkedIn](https://www.linkedin.com/in/eduardo-pinto-android)
-*   Portfolio: [Tu Web/GitHub](https://github.com/eddiexspansk)
+*   LinkedIn: [LinkedIn](https://www.linkedin.com/in/eduardo-pinto-android)
+*   Portfolio: [GitHub](https://github.com/eddiexspansk)
 
 ---
 
